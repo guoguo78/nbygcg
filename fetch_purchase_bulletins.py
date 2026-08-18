@@ -8,10 +8,16 @@ from zoneinfo import ZoneInfo
 
 def fetch_purchase_bulletins():
     url = "https://ygcg.nbcqjy.org/api/Portal/GetBulletinList"
-    # 按用户提供的构造方式使用字符串作为请求体
-    payload = "{\"pageIndex\": 1,\"pageSize\": 100,\"classID\": \"21\"}"
+    # ★ 去掉 classID 限制，拉全量公告；pageSize 加大到 200
+    payload = json.dumps({
+        "pageIndex": 1,
+        "pageSize": 200
+    })
     headers = {
-        'Content-Type': 'application/json;charset-utf-8'
+        'Content-Type': 'application/json;charset=utf-8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Origin': 'https://ygcg.nbcqjy.org',
+        'Referer': 'https://ygcg.nbcqjy.org/'
     }
 
     resp = requests.post(url, headers=headers, data=payload, timeout=30)
@@ -37,7 +43,6 @@ def extract_items(data):
                 items = inner.get(key)
                 if isinstance(items, list):
                     return items
-        # 有些接口直接在 body 下给 list
         for key in ["list", "bulletinList", "items", "rows"]:
             items = body.get(key) if isinstance(body, dict) else None
             if isinstance(items, list):
@@ -66,7 +71,6 @@ def parse_date_to_ymd(value):
 
 
 def parse_to_iso_datetime(value):
-    """将输入解析为标准的 YYYY-MM-DDTHH:MM:SS 字符串。"""
     if not value:
         return None
     s = str(value).strip()
@@ -121,35 +125,12 @@ def process_bulletins(raw_data):
     return processed
 
 
-def filter_recent_bulletins(items, days=3, exclude_today=True):
-    """按 publishDate 只保留最近 days 天内的数据（保留原函数备用）。"""
-    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
-    start = today - timedelta(days=days)
-    filtered = []
-    for b in items:
-        pd = b.get("publishDate")
-        if not pd:
-            continue
-        try:
-            d = datetime.strptime(pd, "%Y-%m-%d").date()
-        except Exception:
-            continue
-        if exclude_today:
-            if start <= d < today:
-                filtered.append(b)
-        else:
-            if start <= d <= today:
-                filtered.append(b)
-    return filtered
-
-
 def main():
-    # ===== 新增：解析 --date 参数（与 fetch_opening_projects.py 保持一致）=====
     parser = argparse.ArgumentParser()
     parser.add_argument('--date', type=str, default="", help='Base date YYYY-MM-DD (from GitHub Actions)')
     args = parser.parse_args()
 
-    # 确定基准日期（优先用传入的，否则用今天）
+    # 确定基准日期
     if args.date:
         try:
             base_date = datetime.strptime(args.date, "%Y-%m-%d").date()
@@ -158,23 +139,37 @@ def main():
     else:
         base_date = datetime.now(ZoneInfo("Asia/Shanghai")).date()
 
-    # 计算近三日范围：前天 ≤ 发布日 ≤ 今天
-    three_days_ago = base_date - timedelta(days=2)  # 前天
+    three_days_ago = base_date - timedelta(days=2)
     today = base_date
 
     print(f"🔍 基准日期：{base_date.strftime('%Y-%m-%d')}")
     print(f"📅 近三日范围：{three_days_ago} ~ {today}")
 
     try:
-        # 1. 抓取全量公告
+        # 1. 抓取
         data = fetch_purchase_bulletins()
         print("✅ 接口请求成功")
 
-        # 2. 清洗提取
-        processed = process_bulletins(data)
-        print(f"📦 原始公告总数：{len(processed)}")
+        # ★ 调试：打印原始返回前 1500 字符，确认接口是否返回了真实数据
+        print("=== 🐛 原始接口返回（前1500字符）===")
+        print(json.dumps(data, ensure_ascii=False)[:1500])
+        print("=====================================")
 
-        # 3. ★ 核心：只保留近三日发布的公告
+        # 2. 清洗
+        processed = process_bulletins(data)
+        print(f"📦 清洗后公告总数：{len(processed)}")
+
+        if not processed:
+            print("⚠️ 清洗后0条数据！接口可能被反爬或返回结构有变。")
+            save_json([], "purchase_bulletins.json")
+            return
+
+        # 3. 逐条打印发布时间，排查时差/字段问题
+        print("📋 前10条公告的发布时间：")
+        for b in processed[:10]:
+            print(f"   [{b.get('publishDate')}] {b.get('bulletinTitle', '')[:30]}")
+
+        # 4. 近三日过滤
         filtered = []
         for b in processed:
             pd = b.get("publishDate")
@@ -187,15 +182,13 @@ def main():
             except Exception:
                 continue
 
-        # 4. 统计覆盖日期（方便调试）
         if filtered:
             dates = sorted(set(b.get('publishDate') for b in filtered if b.get('publishDate')))
-            print(f"📊 覆盖发布日期：{dates}")
+            print(f"📊 匹配到的日期：{dates}")
         print(f"✅ 近三日公告数：{len(filtered)}")
 
-        # 5. 保存
         save_json(filtered, "purchase_bulletins.json")
-        print("💾 输出文件：purchase_bulletins.json")
+        print("💾 已保存到 purchase_bulletins.json")
 
     except Exception as e:
         print(f"❌ 抓取失败: {e}")
