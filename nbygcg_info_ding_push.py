@@ -22,10 +22,7 @@ def load_projects(file_path: str) -> List[Dict]:
 
 def filter_tomorrow_projects(projects: List[Dict]) -> Dict[str, List[Dict]]:
     """筛选开标时间为明天的项目（按项目类型分组）"""
-    target_types = [
-        "信息化建设类项目",
-        "信息化软硬件采购类项目"
-    ]
+    target_types = ["氢能相关业务"]
     grouped: Dict[str, List[Dict]] = {pt: [] for pt in target_types}
     tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     for project in projects:
@@ -65,10 +62,7 @@ def parse_iso_to_display(dt_str: str) -> str:
 
 def filter_yesterday_bulletins(bulletins: List[Dict]) -> Dict[str, List[Dict]]:
     """筛选昨日新增的采购公告（按项目类型分组）"""
-    target_types = [
-        "信息化建设类项目",
-        "信息化软硬件采购类项目"
-    ]
+    target_types =["氢能相关业务"]
     grouped: Dict[str, List[Dict]] = {pt: [] for pt in target_types}
     yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     for b in bulletins:
@@ -85,8 +79,8 @@ def generate_push_content(yesterday_bulletins: Dict[str, List[Dict]], tomorrow_p
     # 标题
     lines.append("## 阳光采购每日摘要")
 
-    # 昨日新增信息化采购公告
-    lines.append("\n### 昨日新增信息化采购公告")
+    # 昨日新增氢能类采购公告
+    lines.append("\n### 昨日新增氢能相关采购公告")
     has_yesterday = any(items for items in yesterday_bulletins.values())
     if not has_yesterday:
         lines.append("- 昨日无新增采购公告")
@@ -117,7 +111,7 @@ def generate_push_content(yesterday_bulletins: Dict[str, List[Dict]], tomorrow_p
 
     # 明日信息化开标项目
     lines.append("")
-    lines.append("### 明日信息化开标项目")
+    lines.append("### 明日氢能业务开标项目")
     has_tomorrow = any(items for items in tomorrow_projects.values())
     if not has_tomorrow:
         lines.append("- 明日无开标项目")
