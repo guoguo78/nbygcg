@@ -5,6 +5,9 @@ on:
     # Runs at 01:00 UTC, which is 9:00 AM in China Standard Time (UTC+8)
     # - cron: '0 1,4 * * *'  
   workflow_dispatch:  # Allows manual triggering
+  
+env:
+  CURRENT_DATE: ${{ github.event.repository.updated_at }}
 
 jobs:
   fetch:
@@ -19,6 +22,10 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+
+    - name: Run data extraction script
+      run: |
+        python main.py --date "${{ env.CURRENT_DATE }}"
     
     - name: Install dependencies
       run: |
