@@ -25,7 +25,7 @@ jobs:
 
     - name: Run data extraction script
       run: |
-        python main.py --date "${{ env.CURRENT_DATE }}"
+        python fetch_purchase_bulletins.py --date "${{ github.event.inputs.date }}"
     
     - name: Install dependencies
       run: |
